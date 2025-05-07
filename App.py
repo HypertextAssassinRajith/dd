@@ -7,7 +7,7 @@ url = "https://dd.lk/public/guest/login.php"
 lesson_base_url = "https://dd.lk/public/student/lesson-singleview.php?lid="
 
 # Launch browser
-driver = webdriver.Chrome()  # You can replace this with the appropriate driver
+driver = webdriver.Chrome()
 driver.get(url)
 
 def print_lessons(lesson_html):
