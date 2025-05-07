@@ -1,14 +1,21 @@
 import time
 import re
+import yt_dlp
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+import os
 
 # ------------------------------------
 # Configuration
 # ------------------------------------
 LOGIN_URL = "https://dd.lk/public/guest/login.php"
 LESSON_BASE_URL = "https://dd.lk/public/student/lesson-singleview.php?lid="
+DOWNLOAD_FOLDER = "downloads"  # Folder where videos will be saved
+
+# Create the download folder if it doesn't exist
+if not os.path.exists(DOWNLOAD_FOLDER):
+    os.makedirs(DOWNLOAD_FOLDER)
 
 # ------------------------------------
 # Setup ChromeDriver
@@ -16,12 +23,31 @@ LESSON_BASE_URL = "https://dd.lk/public/student/lesson-singleview.php?lid="
 options = Options()
 # Uncomment below for headless mode
 # options.add_argument('--headless')
-# options.add_argument('--disable-gpu')
-# options.add_argument('--no-sandbox')
-# options.add_argument('--disable-dev-shm-usage')
+options.add_argument('--disable-gpu')
+options.add_argument('--no-sandbox')
+options.add_argument('--disable-dev-shm-usage')
 
 driver = webdriver.Chrome(options=options)
 driver.get(LOGIN_URL)
+
+def download_video(youtube_url):
+    try:
+        print(f"   ⬇️ Downloading video from: {youtube_url}")
+        ydl_opts = {
+            'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+            'format': 'bestvideo+bestaudio/best',
+            'noplaylist': True,
+            'quiet': False,  # Set to True to suppress output
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',  # Download video as mp4
+            }],
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+            print("   ✅ Download complete!")
+    except Exception as e:
+        print(f"   ❌ Error downloading video: {e}")
 
 def print_lessons_and_check_youtube(lesson_html):
     soup = BeautifulSoup(lesson_html, 'html.parser')
@@ -52,7 +78,14 @@ def print_lessons_and_check_youtube(lesson_html):
             ]
 
             if youtube_iframes:
-                print(f"   ▶️ YouTube video found: {youtube_iframes[0]}")
+                youtube_url = youtube_iframes[0]
+                print(f"   ▶️ YouTube video found: {youtube_url}")
+                # Start downloading the video
+                download_video(youtube_url)
+                # Wait for download to complete before continuing
+                while not any(f.endswith('.mp4') for f in os.listdir(DOWNLOAD_FOLDER)):
+                    print("   ⏳ Waiting for download to complete...")
+                    time.sleep(2)
             else:
                 print("   ⛔ No YouTube video found.")
 
