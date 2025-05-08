@@ -12,6 +12,8 @@ import os
 LOGIN_URL = "https://dd.lk/public/guest/login.php"
 LESSON_BASE_URL = "https://dd.lk/public/student/lesson-singleview.php?lid="
 DOWNLOAD_FOLDER = "downloads"  # Folder where videos will be saved
+CHECKLIST_FILE = "downloaded_lessons.txt"
+
 
 # Create the download folder if it doesn't exist
 if not os.path.exists(DOWNLOAD_FOLDER):
@@ -35,14 +37,13 @@ def download_video(youtube_url):
         print(f"   ⬇️ Downloading video from: {youtube_url}")
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bv*+ba/best',  # best video + best audio
+            'merge_output_format': 'mp4',  # fallback container if merging needed
             'noplaylist': True,
-            'quiet': False,  # Set to True to suppress output
-            'postprocessors': [{
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',  # Download video as mp4
-            }],
+            'quiet': False,
+            'nocheckcertificate': True,
         }
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
             print("   ✅ Download complete!")
@@ -53,6 +54,8 @@ def print_lessons_and_check_youtube(lesson_html):
     soup = BeautifulSoup(lesson_html, 'html.parser')
     lessons = soup.find_all('div', class_='lesson')
 
+    downloaded = load_downloaded_lessons()
+
     for i, lesson in enumerate(lessons, start=1):
         title = lesson.get_text(strip=True)
         onclick = lesson.get('onclick', '')
@@ -61,6 +64,10 @@ def print_lessons_and_check_youtube(lesson_html):
             continue
 
         lid = match.group(1)
+        if lid in downloaded:
+            print(f"   ✅ Skipping already downloaded lesson {lid}: {title}")
+            continue
+
         lesson_url = f"{LESSON_BASE_URL}{lid}"
         print(f"\n{i:02d}. {title} → {lesson_url}")
 
@@ -86,11 +93,26 @@ def print_lessons_and_check_youtube(lesson_html):
                 while not any(f.endswith('.mp4') for f in os.listdir(DOWNLOAD_FOLDER)):
                     print("   ⏳ Waiting for download to complete...")
                     time.sleep(2)
+
+                mark_lesson_as_downloaded(lid)
             else:
                 print("   ⛔ No YouTube video found.")
 
         except Exception as e:
             print(f"   ❌ Error visiting lesson: {e}")
+
+
+def mark_lesson_as_downloaded(lid):
+    with open(CHECKLIST_FILE, 'a') as f:
+        f.write(f"{lid}\n")
+
+
+def load_downloaded_lessons():
+    if not os.path.exists(CHECKLIST_FILE):
+        return set()
+    with open(CHECKLIST_FILE, 'r') as f:
+        return set(line.strip() for line in f.readlines())
+
 
 def get_lesson_container_html():
     soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -117,6 +139,7 @@ try:
 
 except KeyboardInterrupt:
     print("🛑 Stopped watching.")
+
 
 finally:
     driver.quit()
